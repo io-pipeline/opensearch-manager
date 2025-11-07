@@ -1,12 +1,19 @@
 pluginManagement {
     repositories {
-        // Gradle Plugin Portal (proxied through Nexus)
-        maven {
-            url = uri('https://maven.rokkon.com/repository/gradle-plugins/')
-            allowInsecureProtocol = false
+        // Check if running on GitHub Actions
+        def isGitHubActions = System.getenv("GITHUB_ACTIONS") == "true" && System.getenv("GITEA_ACTIONS") == null
+
+        if (isGitHubActions) {
+            // GitHub Actions: Use public plugin portal directly
+            gradlePluginPortal()
+        } else {
+            // Local/Gitea: Use Reposilite proxy for plugins
+            maven {
+                url = uri('https://maven.rokkon.com/gradle-plugins/')
+            }
+            // Fallback to direct plugin portal
+            gradlePluginPortal()
         }
-        gradlePluginPortal()
-        mavenCentral()
     }
 }
 
