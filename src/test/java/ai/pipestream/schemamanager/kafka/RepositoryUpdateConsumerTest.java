@@ -1,10 +1,7 @@
 package ai.pipestream.schemamanager.kafka;
 
-import ai.pipestream.opensearch.v1.MutinyOpenSearchManagerServiceGrpc;
 import ai.pipestream.repository.filesystem.Drive;
 import ai.pipestream.repository.filesystem.DriveUpdateNotification;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -14,14 +11,15 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import io.apicurio.registry.serde.protobuf.ProtobufKafkaSerializer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import org.opensearch.client.opensearch.OpenSearchClient;
 
+import java.io.IOException;
+import java.util.Map;
 import java.util.Properties;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
-// @QuarkusTestResource(OpenSearchTestResource.class)  // Now using compose services
 public class RepositoryUpdateConsumerTest {
 
     @Inject
@@ -32,8 +30,8 @@ public class RepositoryUpdateConsumerTest {
     @ConfigProperty(name = "mp.messaging.connector.smallrye-kafka.apicurio.registry.url")
     String apicurioRegistryUrl;
 
-    @InjectMock
-    MutinyOpenSearchManagerServiceGrpc.MutinyOpenSearchManagerServiceStub openSearchManagerService;
+    @Inject
+    OpenSearchClient openSearchClient;
 
     private KafkaProducer<String, Object> createProducer() {
         Properties props = new Properties();
@@ -46,8 +44,17 @@ public class RepositoryUpdateConsumerTest {
         return new KafkaProducer<>(props);
     }
 
+    private boolean documentExists(String index, String id) {
+        try {
+            var resp = openSearchClient.get(g -> g.index(index).id(id), Map.class);
+            return resp.found();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     @Test
-    public void testConsumer_onDriveCreated_indexesDrive() {
+    public void testConsumer_onDriveCreated_indexesDrive() throws Exception {
         Drive drive = Drive.newBuilder().setName("test-drive-1").build();
         DriveUpdateNotification notification = DriveUpdateNotification.newBuilder()
                 .setDrive(drive)
@@ -55,10 +62,19 @@ public class RepositoryUpdateConsumerTest {
                 .build();
 
         try (KafkaProducer<String, Object> producer = createProducer()) {
-            producer.send(new ProducerRecord<>("drive-updates", drive.getName(), notification));
+            producer.send(new ProducerRecord<>("drive-updates", drive.getName(), notification)).get();
         }
 
-        Mockito.verify(openSearchManagerService, Mockito.timeout(5000).times(1))
-                .indexDocument(any());
+        long deadline = System.currentTimeMillis() + 15000; // up to 15s for indexing
+        boolean found = false;
+        while (System.currentTimeMillis() < deadline) {
+            if (documentExists("filesystem-drives", drive.getName())) {
+                found = true;
+                break;
+            }
+            Thread.sleep(500);
+        }
+
+        assertTrue(found, "Indexed drive document not found in OpenSearch within timeout");
     }
 }

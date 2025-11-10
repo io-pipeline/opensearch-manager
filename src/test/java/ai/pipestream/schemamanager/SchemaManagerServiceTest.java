@@ -6,6 +6,8 @@ import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
+import java.util.UUID;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -30,7 +32,7 @@ class SchemaManagerServiceTest {
                 .build();
 
         var request = EnsureNestedEmbeddingsFieldExistsRequest.newBuilder()
-                .setIndexName("test-index")
+                .setIndexName("test-index-" + UUID.randomUUID())
                 .setNestedFieldName("embeddings")
                 .setVectorFieldDefinition(vectorFieldDef)
                 .build();
@@ -57,8 +59,10 @@ class SchemaManagerServiceTest {
                         .build())
                 .build();
 
+        String indexName = "test-index-idempotent-" + UUID.randomUUID();
+
         var request = EnsureNestedEmbeddingsFieldExistsRequest.newBuilder()
-                .setIndexName("test-index-idempotent")
+                .setIndexName(indexName)
                 .setNestedFieldName("embeddings")
                 .setVectorFieldDefinition(vectorFieldDef)
                 .build();
