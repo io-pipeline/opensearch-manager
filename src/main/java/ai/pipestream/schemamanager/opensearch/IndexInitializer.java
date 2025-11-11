@@ -16,6 +16,9 @@ import org.opensearch.client.opensearch.indices.ExistsRequest;
 import org.opensearch.client.opensearch.indices.IndexSettings;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 import static ai.pipestream.schemamanager.opensearch.IndexConstants.Index;
 
@@ -38,7 +41,8 @@ public class IndexInitializer {
     }
 
     private void ensureIndex(String indexName, TypeMapping mapping) throws IOException {
-        boolean exists = client.indices().exists(new ExistsRequest.Builder().index(indexName).build()).value();
+        boolean exists = executeWithRetry("check index existence for " + indexName,
+            () -> client.indices().exists(new ExistsRequest.Builder().index(indexName).build()).value());
         if (exists) {
             return;
         }
@@ -52,7 +56,10 @@ public class IndexInitializer {
                 .settings(settings)
                 .mappings(mapping)
                 .build();
-        client.indices().create(req);
+        executeWithRetry("create index " + indexName, () -> {
+            client.indices().create(req);
+            return null;
+        });
     }
 
     private TypeMapping buildPipeDocsMapping() {
@@ -99,5 +106,37 @@ public class IndexInitializer {
         b.properties("last_accessed", Property.of(p -> p.date(d -> d)));
         b.properties("indexed_at", Property.of(p -> p.date(d -> d)));
         return b.build();
+    }
+
+    private <T> T executeWithRetry(String description, Callable<T> operation) throws IOException {
+        int attempts = 0;
+        while (true) {
+            try {
+                return operation.call();
+            } catch (Exception e) {
+                attempts++;
+                if (!isRetryable(e) || attempts >= 6) {
+                    if (e instanceof IOException ioException) {
+                        throw ioException;
+                    }
+                    if (e instanceof RuntimeException runtimeException) {
+                        throw runtimeException;
+                    }
+                    throw new IOException("Failed to " + description, e);
+                }
+                long delayMillis = Duration.ofMillis(250L * attempts).toMillis();
+                LOG.warnf("Retrying %s due to %s (attempt %d, delay %d ms)", description, e.getMessage(), attempts, delayMillis);
+                try {
+                    TimeUnit.MILLISECONDS.sleep(delayMillis);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while retrying " + description, interruptedException);
+                }
+            }
+        }
+    }
+
+    private boolean isRetryable(Throwable throwable) {
+        return throwable instanceof IOException;
     }
 }

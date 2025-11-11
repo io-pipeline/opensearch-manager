@@ -6,19 +6,22 @@ import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.apache.hc.client5.http.HttpHostConnectException;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch.indices.ExistsRequest;
 import org.opensearch.client.opensearch.indices.GetMappingResponse;
 import org.opensearch.client.opensearch.indices.IndexSettings;
-import org.opensearch.client.opensearch.indices.ExistsRequest;
-import org.opensearch.client.opensearch._types.mapping.Property;
-import org.opensearch.client.opensearch._types.mapping.TypeMapping;
-import org.opensearch.client.opensearch._types.mapping.NestedProperty;
 import org.opensearch.client.opensearch._types.mapping.KnnVectorProperty;
+import org.opensearch.client.opensearch._types.mapping.NestedProperty;
+import org.opensearch.client.opensearch._types.mapping.Property;
 import org.opensearch.client.opensearch._types.mapping.TextProperty;
+import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.json.JsonData;
-import java.util.Map;
-import java.util.HashMap;
+
 import java.io.IOException;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @ApplicationScoped
 public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
@@ -31,14 +34,21 @@ public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
         return Uni.createFrom().item(() -> {
             try {
                 boolean exists = client.indices().exists(new ExistsRequest.Builder().index(indexName).build()).value();
-                if (!exists) return false;
-                
+                if (!exists) {
+                    return false;
+                }
+
                 var mapping = client.indices().getMapping(b -> b.index(indexName));
                 return mappingContainsNestedField(mapping, nestedFieldName);
             } catch (IOException e) {
-                return false;
+                throw new RuntimeException(e);
             }
-        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+        })
+        .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+        .onFailure(this::isRetryable)
+        .retry()
+        .withBackOff(Duration.ofMillis(250), Duration.ofSeconds(3))
+        .atMost(6);
     }
 
     private boolean mappingContainsNestedField(GetMappingResponse mapping, String nestedFieldName) {
@@ -55,7 +65,7 @@ public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
         return Uni.createFrom().item(() -> {
             try {
                 var settings = new IndexSettings.Builder().knn(true).build();
-                
+
                 var mapping = new TypeMapping.Builder()
                     .properties(nestedFieldName, Property.of(property -> property
                         .nested(NestedProperty.of(nested -> nested
@@ -70,19 +80,24 @@ public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
                         ))
                     ))
                     .build();
-                
+
                 var createRequest = new org.opensearch.client.opensearch.indices.CreateIndexRequest.Builder()
                     .index(indexName)
                     .settings(settings)
                     .mappings(mapping)
                     .build();
-                
+
                 var response = client.indices().create(createRequest);
                 return response.acknowledged();
             } catch (IOException e) {
-                return false;
+                throw new RuntimeException(e);
             }
-        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+        })
+        .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+        .onFailure(this::isRetryable)
+        .retry()
+        .withBackOff(Duration.ofMillis(250), Duration.ofSeconds(3))
+        .atMost(6);
     }
     
     private KnnVectorProperty createKnnVectorProperty(VectorFieldDefinition vectorDef) {
@@ -138,5 +153,13 @@ public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
             case INNERPRODUCT -> "hnsw";
             case UNRECOGNIZED -> "hnsw";
         };
+    }
+
+    private boolean isRetryable(Throwable throwable) {
+        Throwable root = throwable;
+        if (throwable instanceof RuntimeException && throwable.getCause() != null) {
+            root = throwable.getCause();
+        }
+        return root instanceof IOException || root instanceof HttpHostConnectException;
     }
 }
