@@ -1,10 +1,11 @@
 package ai.pipestream.schemamanager.kafka;
 
-import ai.pipestream.repository.filesystem.Drive;
-import ai.pipestream.repository.filesystem.DriveUpdateNotification;
+import ai.pipestream.repository.v1.filesystem.Drive;
+import ai.pipestream.repository.v1.filesystem.DriveUpdateNotification;
+import ai.pipestream.schemamanager.util.WireMockTestResource;
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import ai.pipestream.grpc.util.KafkaProtobufKeys;
 import io.smallrye.reactive.messaging.MutinyEmitter;
 import io.smallrye.reactive.messaging.kafka.Record;
 import org.eclipse.microprofile.reactive.messaging.Channel;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
+@QuarkusTestResource(WireMockTestResource.class)
 public class RepositoryUpdateConsumerTest {
 
     @Inject
@@ -44,7 +46,8 @@ public class RepositoryUpdateConsumerTest {
                 .setUpdateType("CREATED")
                 .build();
 
-        UUID key = KafkaProtobufKeys.uuid(notification);
+        // Generate deterministic UUID from drive name for testing
+        UUID key = UUID.nameUUIDFromBytes(drive.getName().getBytes(java.nio.charset.StandardCharsets.UTF_8));
         // OpenSearchIndexingService.indexDrive uses UUID key as the document ID
 
         // Send message using SmallRye Emitter with string key (what the consumer actually receives)

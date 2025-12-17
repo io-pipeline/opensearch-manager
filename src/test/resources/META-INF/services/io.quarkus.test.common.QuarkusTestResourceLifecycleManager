@@ -1,1 +1,1 @@
-ai.pipestream.schemamanager.MockPlatformRegistrationTestResource
+ai.pipestream.schemamanager.util.WireMockTestResource

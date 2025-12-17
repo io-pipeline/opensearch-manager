@@ -77,7 +77,7 @@ class Strategy1ManagerTest {
                 .setDimension(384)
                 .setKnnMethod(KnnMethodDefinition.newBuilder()
                         .setEngine(KnnMethodDefinition.getDefaultInstance().getEngine())
-                        .setSpaceType(KnnMethodDefinition.SpaceType.COSINESIMIL)
+                        .setSpaceType(KnnMethodDefinition.SpaceType.SPACE_TYPE_COSINESIMIL)
                         .setParameters(KnnParametersDefinition.newBuilder()
                                 .setM(com.google.protobuf.Int32Value.of(16))
                                 .setEfConstruction(com.google.protobuf.Int32Value.of(128))
@@ -88,6 +88,6 @@ class Strategy1ManagerTest {
         // Then: Should have proper configuration
         assertThat("Should have correct dimension", vectorDef.getDimension(), equalTo(384));
         assertThat("Should use cosine similarity", vectorDef.getKnnMethod().getSpaceType(), 
-                   equalTo(KnnMethodDefinition.SpaceType.COSINESIMIL));
+                   equalTo(KnnMethodDefinition.SpaceType.SPACE_TYPE_COSINESIMIL));
     }
 }

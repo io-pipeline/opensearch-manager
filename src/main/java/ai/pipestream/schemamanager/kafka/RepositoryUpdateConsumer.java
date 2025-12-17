@@ -1,11 +1,14 @@
 package ai.pipestream.schemamanager.kafka;
 
-import ai.pipestream.grpc.util.KafkaProtobufKeys;
-import ai.pipestream.repository.filesystem.DriveUpdateNotification;
-import ai.pipestream.repository.filesystem.RepositoryEvent;
-import ai.pipestream.repository.filesystem.MutinyFilesystemServiceGrpc;
-import ai.pipestream.repository.filesystem.GetNodeRequest;
-import ai.pipestream.dynamic.grpc.client.GrpcClientProvider;
+import ai.pipestream.quarkus.dynamicgrpc.DynamicGrpcClientFactory;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import ai.pipestream.repository.v1.filesystem.DriveUpdateNotification;
+import ai.pipestream.repository.v1.filesystem.RepositoryEvent;
+import ai.pipestream.repository.v1.filesystem.MutinyFilesystemServiceGrpc;
+import ai.pipestream.repository.v1.filesystem.GetNodeRequest;
+import ai.pipestream.repository.v1.filesystem.GetNodeResponse;
+import ai.pipestream.repository.v1.filesystem.Node;
+import io.smallrye.reactive.messaging.kafka.api.IncomingKafkaRecordMetadata;
 import ai.pipestream.repository.v1.ModuleUpdateNotification;
 import ai.pipestream.repository.v1.PipeDocUpdateNotification;
 import ai.pipestream.repository.v1.ProcessRequestUpdateNotification;
@@ -13,10 +16,8 @@ import ai.pipestream.repository.v1.ProcessResponseUpdateNotification;
 import ai.pipestream.config.v1.GraphUpdateNotification;
 import ai.pipestream.schemamanager.opensearch.OpenSearchIndexingService;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.reactive.messaging.kafka.Record;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.jboss.logging.Logger;
 
@@ -34,14 +35,15 @@ public class RepositoryUpdateConsumer {
     OpenSearchIndexingService indexingService;
 
     @Inject
-    GrpcClientProvider grpcClientProvider;
+    DynamicGrpcClientFactory grpcClientFactory;
     
     @Incoming("drive-updates-in")
-    public Uni<Void> consumeDriveUpdate(Message<Record<String, DriveUpdateNotification>> message) {
-        Record<String, DriveUpdateNotification> record = message.getPayload();
-        DriveUpdateNotification notification = record.value();
-        // Use our tool to get the deterministic UUID key from the protobuf
-        java.util.UUID key = KafkaProtobufKeys.uuid(notification);
+    public Uni<Void> consumeDriveUpdate(Message<DriveUpdateNotification> message) {
+        DriveUpdateNotification notification = message.getPayload();
+        // Get UUID key from Kafka metadata
+        IncomingKafkaRecordMetadata<UUID, DriveUpdateNotification> metadata = 
+                message.getMetadata(IncomingKafkaRecordMetadata.class).orElse(null);
+        UUID key = metadata != null ? metadata.getKey() : UUID.randomUUID();
         LOG.infof("Received drive update: type=%s, drive=%s, key=%s",
                 notification.getUpdateType(), notification.getDrive().getName(), key);
 
@@ -66,9 +68,7 @@ public class RepositoryUpdateConsumer {
                 event.getDocumentId(), event.getAccountId());
 
         // Use dynamic gRPC to call repository service and get node metadata (without payload)
-        return grpcClientProvider.getClientForService(
-                MutinyFilesystemServiceGrpc.MutinyFilesystemServiceStub.class,
-                "repository-service")
+        return grpcClientFactory.getClient("repository-service", MutinyFilesystemServiceGrpc::newMutinyStub)
             .flatMap(repoClient -> {
                 GetNodeRequest getNodeRequest = GetNodeRequest.newBuilder()
                     .setDrive(event.getAccountId())
@@ -78,6 +78,7 @@ public class RepositoryUpdateConsumer {
 
                 return repoClient.getNode(getNodeRequest);
             })
+            .map(GetNodeResponse::getNode)
             .flatMap(node -> {
                 // Index the node metadata in OpenSearch
                 return indexingService.indexNode(node, event.getAccountId());

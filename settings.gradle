@@ -9,12 +9,12 @@ rootProject.name = 'opensearch-manager'
 dependencyResolutionManagement {
     versionCatalogs {
         libs {
-            from("ai.pipestream:pipeline-bom-catalog:0.2.10-SNAPSHOT")
+            from("ai.pipestream:pipestream-bom-catalog:0.7.8")
         }
     }
 
     repositories {
-        // Prefer Maven Central but allow locally published releases for development
+        // Maven Local for local development (releases only for ai.pipestream)
         mavenLocal {
             mavenContent {
                 releasesOnly()
@@ -26,10 +26,33 @@ dependencyResolutionManagement {
 
         mavenCentral()
 
+        // Sonatype snapshots
         maven {
             url = uri('https://central.sonatype.com/repository/maven-snapshots/')
             mavenContent {
                 snapshotsOnly()
+            }
+        }
+        
+        // GitHub Packages for ai.pipestream catalog and dependencies
+        def githubToken = providers.environmentVariable("GITHUB_TOKEN")
+            .orElse(providers.gradleProperty("gpr.key"))
+            .orElse(providers.environmentVariable("GPR_TOKEN"))
+        
+        def githubActor = providers.environmentVariable("GITHUB_ACTOR")
+            .orElse(providers.gradleProperty("gpr.user"))
+            .orElse(providers.environmentVariable("GPR_USER"))
+        
+        if (githubToken.isPresent() && githubActor.isPresent()) {
+            maven {
+                url = uri("https://maven.pkg.github.com/ai-pipestream/bom")
+                credentials {
+                    username = githubActor.get()
+                    password = githubToken.get()
+                }
+                content {
+                    includeGroupByRegex "ai\\.pipestream(\\..*)?"
+                }
             }
         }
 

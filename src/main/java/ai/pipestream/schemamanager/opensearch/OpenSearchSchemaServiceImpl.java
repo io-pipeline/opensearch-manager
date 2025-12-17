@@ -108,7 +108,7 @@ public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
                 var method = vectorDef.getKnnMethod();
                 knn.method(methodDef -> {
                     methodDef.name(getMethodName(method.getSpaceType()));
-                    methodDef.engine(method.getEngine().name().toLowerCase());
+                    methodDef.engine(mapEngine(method.getEngine()));
                     methodDef.spaceType(mapSpaceType(method.getSpaceType()));
                     
                     if (method.hasParameters()) {
@@ -137,20 +137,27 @@ public class OpenSearchSchemaServiceImpl implements OpenSearchSchemaService {
         });
     }
     
+    private String mapEngine(KnnMethodDefinition.KnnEngine engine) {
+        return switch (engine) {
+            case KNN_ENGINE_UNSPECIFIED -> "lucene"; // Default to Lucene engine
+            case UNRECOGNIZED -> "lucene";
+        };
+    }
+    
     private String mapSpaceType(KnnMethodDefinition.SpaceType spaceType) {
         return switch (spaceType) {
-            case L2 -> "l2";
-            case COSINESIMIL -> "cosinesimil";
-            case INNERPRODUCT -> "innerproduct";
+            case SPACE_TYPE_UNSPECIFIED -> "cosinesimil";
+            case SPACE_TYPE_COSINESIMIL -> "cosinesimil";
+            case SPACE_TYPE_INNERPRODUCT -> "innerproduct";
             case UNRECOGNIZED -> "cosinesimil";
         };
     }
     
     private String getMethodName(KnnMethodDefinition.SpaceType spaceType) {
         return switch (spaceType) {
-            case L2 -> "hnsw";
-            case COSINESIMIL -> "hnsw";
-            case INNERPRODUCT -> "hnsw";
+            case SPACE_TYPE_UNSPECIFIED -> "hnsw";
+            case SPACE_TYPE_COSINESIMIL -> "hnsw";
+            case SPACE_TYPE_INNERPRODUCT -> "hnsw";
             case UNRECOGNIZED -> "hnsw";
         };
     }

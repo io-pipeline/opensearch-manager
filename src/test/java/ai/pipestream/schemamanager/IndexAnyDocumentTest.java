@@ -1,7 +1,9 @@
 package ai.pipestream.schemamanager;
 
 import ai.pipestream.opensearch.v1.*;
+import ai.pipestream.schemamanager.util.WireMockTestResource;
 import io.quarkus.grpc.GrpcClient;
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import com.google.protobuf.Any;
 import com.google.protobuf.StringValue;
@@ -12,6 +14,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
+@QuarkusTestResource(WireMockTestResource.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class IndexAnyDocumentTest {
 

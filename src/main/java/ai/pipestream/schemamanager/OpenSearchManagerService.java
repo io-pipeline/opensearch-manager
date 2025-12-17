@@ -159,7 +159,7 @@ public class OpenSearchManagerService extends MutinyOpenSearchManagerServiceGrpc
     }
 
     @Override
-    public Uni<IndexDocumentResponse> indexAnyDocument(IndexAnyDocumentRequest request) {
+    public Uni<IndexAnyDocumentResponse> indexAnyDocument(IndexAnyDocumentRequest request) {
         return Uni.createFrom().item(() -> {
             try {
                 var anyDocument = request.getDocument();
@@ -213,20 +213,20 @@ public class OpenSearchManagerService extends MutinyOpenSearchManagerServiceGrpc
                 LOG.infof("Indexing Any document (type: %s) to index %s with %d field mappings", 
                          anyDocument.getTypeUrl(), indexName, fieldMappings.size());
                 
-                return IndexDocumentResponse.newBuilder()
+                return IndexAnyDocumentResponse.newBuilder()
                     .setSuccess(true)
                     .setDocumentId(documentId)
                     .setMessage("Any document indexed successfully with field mappings")
                     .build();
             } catch (InvalidProtocolBufferException e) {
                 LOG.errorf(e, "Failed to unpack Any document");
-                return IndexDocumentResponse.newBuilder()
+                return IndexAnyDocumentResponse.newBuilder()
                     .setSuccess(false)
                     .setMessage("Failed to unpack Any document: " + e.getMessage())
                     .build();
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to index Any document");
-                return IndexDocumentResponse.newBuilder()
+                return IndexAnyDocumentResponse.newBuilder()
                     .setSuccess(false)
                     .setMessage("Failed to index Any document: " + e.getMessage())
                     .build();
@@ -292,7 +292,7 @@ public class OpenSearchManagerService extends MutinyOpenSearchManagerServiceGrpc
     }
 
     @Override
-    public Uni<FilesystemMetaSearchResponse> searchFilesystemMeta(FilesystemMetaSearchRequest request) {
+    public Uni<SearchFilesystemMetaResponse> searchFilesystemMeta(SearchFilesystemMetaRequest request) {
         LOG.infof("Searching filesystem metadata: drive=%s, query=%s", request.getDrive(), request.getQuery());
 
         String index = ai.pipestream.schemamanager.opensearch.IndexConstants.Index.REPOSITORY_PIPEDOCS.getIndexName();
@@ -356,11 +356,11 @@ public class OpenSearchManagerService extends MutinyOpenSearchManagerServiceGrpc
         try {
             fut = openSearchAsyncClient.search(searchBuilder.build(), java.util.Map.class);
         } catch (java.io.IOException e) {
-            return Uni.createFrom().item(FilesystemMetaSearchResponse.newBuilder().setTotalCount(0).build());
+            return Uni.createFrom().item(SearchFilesystemMetaResponse.newBuilder().setTotalCount(0).build());
         }
         return io.smallrye.mutiny.Uni.createFrom().completionStage(fut)
             .onItem().transform(resp -> {
-                FilesystemMetaSearchResponse.Builder out = FilesystemMetaSearchResponse.newBuilder();
+                SearchFilesystemMetaResponse.Builder out = SearchFilesystemMetaResponse.newBuilder();
                 Integer total = resp.hits().total() == null ? null : (int) resp.hits().total().value();
                 out.setTotalCount(total == null ? resp.hits().hits().size() : total);
                 float maxScore = 0f;
@@ -420,7 +420,7 @@ public class OpenSearchManagerService extends MutinyOpenSearchManagerServiceGrpc
             })
             .onFailure().recoverWithItem(err -> {
                 org.jboss.logging.Logger.getLogger(getClass()).errorf(err, "OpenSearch query failed for drive=%s, query=%s", request.getDrive(), request.getQuery());
-                return FilesystemMetaSearchResponse.newBuilder().setTotalCount(0).build();
+                return SearchFilesystemMetaResponse.newBuilder().setTotalCount(0).build();
             });
     }
 }

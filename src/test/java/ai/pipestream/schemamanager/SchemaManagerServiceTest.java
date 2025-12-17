@@ -1,7 +1,9 @@
 package ai.pipestream.schemamanager;
 
 import ai.pipestream.opensearch.v1.*;
+import ai.pipestream.schemamanager.util.WireMockTestResource;
 import io.quarkus.grpc.GrpcClient;
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -14,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
+@QuarkusTestResource(WireMockTestResource.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SchemaManagerServiceTest {
 
@@ -26,8 +29,8 @@ class SchemaManagerServiceTest {
         var vectorFieldDef = VectorFieldDefinition.newBuilder()
                 .setDimension(384)
                 .setKnnMethod(KnnMethodDefinition.newBuilder()
-                        .setEngine(KnnMethodDefinition.KnnEngine.LUCENE)
-                        .setSpaceType(KnnMethodDefinition.SpaceType.COSINESIMIL)
+                        .setEngine(KnnMethodDefinition.KnnEngine.KNN_ENGINE_UNSPECIFIED)
+                        .setSpaceType(KnnMethodDefinition.SpaceType.SPACE_TYPE_COSINESIMIL)
                         .build())
                 .build();
 
@@ -54,8 +57,8 @@ class SchemaManagerServiceTest {
         var vectorFieldDef = VectorFieldDefinition.newBuilder()
                 .setDimension(768)
                 .setKnnMethod(KnnMethodDefinition.newBuilder()
-                        .setEngine(KnnMethodDefinition.KnnEngine.LUCENE)
-                        .setSpaceType(KnnMethodDefinition.SpaceType.L2)
+                        .setEngine(KnnMethodDefinition.KnnEngine.KNN_ENGINE_UNSPECIFIED)
+                        .setSpaceType(KnnMethodDefinition.SpaceType.SPACE_TYPE_UNSPECIFIED)
                         .build())
                 .build();
 
